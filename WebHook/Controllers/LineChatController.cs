@@ -197,7 +197,7 @@ namespace WebHook.Controllers
 
             // 使用預設編碼讀入 HTML 
             HtmlDocument doc = new HtmlDocument();
-            doc.Load(ms, Encoding.UTF8);
+            doc.Load(ms, Encoding.ASCII);
 
             // 裝載第一層查詢結果 
             HtmlDocument docStockContext = new HtmlDocument();
