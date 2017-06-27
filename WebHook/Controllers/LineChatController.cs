@@ -7,6 +7,9 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
 using WebHook.Models;
+using System.IO;
+using HtmlAgilityPack;
+using System.Text;
 
 namespace WebHook.Controllers
 {
@@ -42,6 +45,12 @@ namespace WebHook.Controllers
                 if (userMsg.ToUpper().Contains("PM2.5") || userMsg.Contains("空氣品質") || userMsg.Contains("空污"))
                 {
                     await GetAirQulity(userMsg.ToUpper());
+                }
+
+                //專門處理關鍵字 - "股價 / 股票"
+                if (userMsg.ToUpper().Contains("股價") || userMsg.Contains("股票"))
+                {
+                    GetStock(userMsg.ToUpper());
                 }
 
                 //專門處理關鍵字 - "里長嬤"
@@ -154,6 +163,7 @@ namespace WebHook.Controllers
                                 if (intPM25 >= 71) recommend = "(任何人如果有不適，如眼痛，咳嗽或喉嚨痛等，應減少體力消耗，特別是減少戶外活動)";
 
                             remsg = remsg + string.Format("{0}的 PM2.5數值為{1} {2}", rr.SiteName, rr.PM25, recommend);
+                            nloop++;
                         }
                         LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
                     }
@@ -168,6 +178,53 @@ namespace WebHook.Controllers
                 LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, ex.Message);
             }
             return;
+        }
+        #endregion
+
+        #region 專門處理股價查詢
+        private void GetStock(string msg)
+        {
+            // 先處理對話訊息的字眼
+            msg = msg.Replace("的", "");
+            msg = msg.Replace("股票", "");           
+            msg = msg.Replace("股價", "");
+            msg = msg.Replace("是", "");
+            msg = msg.Replace("多少", "");
+
+            // 下載 Yahoo 奇摩股市資料
+            WebClient client = new WebClient();
+            MemoryStream ms = new MemoryStream(client.DownloadData(string.Format("http://tw.stock.yahoo.com/q/q?s={0}",msg)));
+
+            // 使用預設編碼讀入 HTML 
+            HtmlDocument doc = new HtmlDocument();
+            doc.Load(ms, Encoding.Default);
+
+            // 裝載第一層查詢結果 
+            HtmlDocument docStockContext = new HtmlDocument();
+
+            docStockContext.LoadHtml(doc.DocumentNode.SelectSingleNode("/html[1]/body[1]/center[1]/table[2]/tr[1]/td[1]/table[1]").InnerHtml);
+
+            // 取得個股標頭 
+            HtmlNodeCollection nodeHeaders = docStockContext.DocumentNode.SelectNodes("./tr[1]/th");
+            // 取得個股數值 
+            string[] values = docStockContext.DocumentNode.SelectSingleNode("./tr[2]").InnerText.Trim().Split('\n');
+
+            string remsg = string.Empty;
+            int i = 0;
+            // 輸出資料 
+            foreach (HtmlNode nodeHeader in nodeHeaders)
+            {
+                remsg += string.Format("Header: {0}, Value: {1} %0D%0A", nodeHeader.InnerText, values[i].Trim());                
+                i++;
+            }
+
+            doc = null;
+            docStockContext = null;
+            client = null;
+            ms.Close();
+
+            LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
+            
         }
         #endregion
     }
