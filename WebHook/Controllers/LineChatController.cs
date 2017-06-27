@@ -197,14 +197,14 @@ namespace WebHook.Controllers
 
             // 使用預設編碼讀入 HTML 
             HtmlDocument doc = new HtmlDocument();
-            doc.Load(ms, Encoding.Default);
+            doc.Load(ms, Encoding.UTF8);
 
             // 裝載第一層查詢結果 
             HtmlDocument docStockContext = new HtmlDocument();
 
             docStockContext.LoadHtml(doc.DocumentNode.SelectSingleNode("/html[1]/body[1]/center[1]/table[2]/tr[1]/td[1]/table[1]").InnerHtml);
 
-            // 取得個股標頭 
+            // 取得個股標頭V 
             HtmlNodeCollection nodeHeaders = docStockContext.DocumentNode.SelectNodes("./tr[1]/th");
             // 取得個股數值 
             string[] values = docStockContext.DocumentNode.SelectSingleNode("./tr[2]").InnerText.Trim().Split('\n');
@@ -214,7 +214,7 @@ namespace WebHook.Controllers
             // 輸出資料 
             foreach (HtmlNode nodeHeader in nodeHeaders)
             {
-                remsg += string.Format("Header: {0}, Value: {1} %0D%0A", nodeHeader.InnerText, values[i].Trim());                
+                remsg += string.Format("Header: {0}, Value: {1} \\r\\n", nodeHeader.InnerText, values[i].Trim());                
                 i++;
             }
 
