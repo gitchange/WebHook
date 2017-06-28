@@ -10,6 +10,7 @@ using WebHook.Models;
 using System.IO;
 using HtmlAgilityPack;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace WebHook.Controllers
 {
@@ -184,12 +185,8 @@ namespace WebHook.Controllers
         #region 專門處理股價查詢
         private void GetStock(string msg)
         {
-            // 先處理對話訊息的字眼
-            msg = msg.Replace("的", "");
-            msg = msg.Replace("股票", "");
-            msg = msg.Replace("股價", "");
-            msg = msg.Replace("是", "");
-            msg = msg.Replace("多少", "");
+            // 先處理對話訊息的字眼,只留數字
+            msg = Regex.Replace(msg, "[^0-9]", "");
 
             List<YahooStock> list = new List<YahooStock>();
             HtmlWeb htmlWeb = new HtmlWeb();
@@ -222,7 +219,7 @@ namespace WebHook.Controllers
             foreach (var st in list)
             {
                 remsg += string.Format(@"股票代碼：{1}{0}捉取時間{2}{0}成交價：{3}{0}買進價：{4}{0}賣出價：{5}{0}漲跌：{6}{0}成交量：{7}{0}昨日收盤價：{8}{0}開盤價：{9}{0}最高價：{10}{0}最低價：{11}{0}",
-                                                  System.Environment.NewLine, st.StockID, st.DateTime, st.DealPrice,
+                                                  System.Environment.NewLine, st.StockID.Replace("加到投資組合",""), st.DateTime, st.DealPrice,
                                                   st.BuyPrice, st.SellPrice, st.UpDown.Trim(), st.StockQty,
                                                   st.YesterdayPrice, st.OpenPrice, st.Highest, st.Lowest);
             }
