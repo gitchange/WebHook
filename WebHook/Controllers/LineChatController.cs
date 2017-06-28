@@ -221,21 +221,10 @@ namespace WebHook.Controllers
             string remsg = string.Empty;
             foreach (var st in list)
             {
-                remsg += string.Format(@"股票代碼：{1}{0}
-                                              捉取時間{2}{0}
-                                              成交價：{3}{0}
-                                              買進價：{4}{0}
-                                              賣出價：{5}{0}
-                                              漲跌：{6}{0}
-                                              成交量：{7}{0}
-                                              昨日收盤價：{8}{0}
-                                              開盤價：{9}{0}
-                                              最高價：{10}{0}
-                                              最低價：{11}{0}
-                                              個股資訊：{12}{0}",
+                remsg += string.Format(@"股票代碼：{1}{0}捉取時間{2}{0}成交價：{3}{0}買進價：{4}{0}賣出價：{5}{0}漲跌：{6}{0}成交量：{7}{0}昨日收盤價：{8}{0}開盤價：{9}{0}最高價：{10}{0}最低價：{11}{0}",
                                                   System.Environment.NewLine, st.StockID, st.DateTime, st.DealPrice,
-                                                  st.BuyPrice, st.SellPrice, st.UpDown, st.StockQty,
-                                                  st.YesterdayPrice, st.OpenPrice, st.Highest, st.Lowest, st.StockInfo);
+                                                  st.BuyPrice, st.SellPrice, st.UpDown.Trim(), st.StockQty,
+                                                  st.YesterdayPrice, st.OpenPrice, st.Highest, st.Lowest);
             }
             LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
         }
