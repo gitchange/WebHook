@@ -186,45 +186,58 @@ namespace WebHook.Controllers
         {
             // 先處理對話訊息的字眼
             msg = msg.Replace("的", "");
-            msg = msg.Replace("股票", "");           
+            msg = msg.Replace("股票", "");
             msg = msg.Replace("股價", "");
             msg = msg.Replace("是", "");
             msg = msg.Replace("多少", "");
 
-            // 下載 Yahoo 奇摩股市資料
-            WebClient client = new WebClient();
-            MemoryStream ms = new MemoryStream(client.DownloadData(string.Format("http://tw.stock.yahoo.com/q/q?s={0}",msg)));
+            List<YahooStock> list = new List<YahooStock>();
+            HtmlWeb htmlWeb = new HtmlWeb();
+            htmlWeb.OverrideEncoding = Encoding.GetEncoding("big5");
+            HtmlAgilityPack.HtmlDocument htmlDoc = htmlWeb.Load(string.Format(@"http://tw.stock.yahoo.com/q/q?s={0}", msg));
 
-            // 使用預設編碼讀入 HTML 
-            HtmlDocument doc = new HtmlDocument();
-            doc.Load(ms, Encoding.ASCII);
+            //讀取 Yahoo Stock 網頁
+            htmlDoc.DocumentNode.SelectNodes("/html[1]/body[1]/center[1]/table[2]/tr[1]/td[1]/table[1]").
+                AsParallel().ToList().ForEach(ac =>
+                {
+                    HtmlNode node = ac.SelectSingleNode("./tr[1]/th");
 
-            // 裝載第一層查詢結果 
-            HtmlDocument docStockContext = new HtmlDocument();
-
-            docStockContext.LoadHtml(doc.DocumentNode.SelectSingleNode("/html[1]/body[1]/center[1]/table[2]/tr[1]/td[1]/table[1]").InnerHtml);
-
-            // 取得個股標頭V 
-            HtmlNodeCollection nodeHeaders = docStockContext.DocumentNode.SelectNodes("./tr[1]/th");
-            // 取得個股數值 
-            string[] values = docStockContext.DocumentNode.SelectSingleNode("./tr[2]").InnerText.Trim().Split('\n');
-
+                    list.Add(new YahooStock
+                    {
+                        StockID = ac.SelectSingleNode("./tr[2]/td[1]").InnerText,
+                        DateTime = ac.SelectSingleNode("./tr[2]/td[2]").InnerText,
+                        DealPrice = ac.SelectSingleNode("./tr[2]/td[3]").InnerText,
+                        BuyPrice = ac.SelectSingleNode("./tr[2]/td[4]").InnerText,
+                        SellPrice = ac.SelectSingleNode("./tr[2]/td[5]").InnerText,
+                        UpDown = ac.SelectSingleNode("./tr[2]/td[6]").InnerText,
+                        StockQty = ac.SelectSingleNode("./tr[2]/td[7]").InnerText,
+                        YesterdayPrice = ac.SelectSingleNode("./tr[2]/td[8]").InnerText,
+                        OpenPrice = ac.SelectSingleNode("./tr[2]/td[9]").InnerText,
+                        Highest = ac.SelectSingleNode("./tr[2]/td[10]").InnerText,
+                        Lowest = ac.SelectSingleNode("./tr[2]/td[11]").InnerText,
+                        StockInfo = ac.SelectSingleNode("./tr[2]/td[12]").InnerText
+                    });
+                });
             string remsg = string.Empty;
-            int i = 0;
-            // 輸出資料 
-            foreach (HtmlNode nodeHeader in nodeHeaders)
+            foreach (var st in list)
             {
-                remsg += string.Format("Header: {0}, Value: {1} \\r\\n", nodeHeader.InnerText, values[i].Trim());                
-                i++;
+                remsg += string.Format(@"股票代碼：{1}{0}
+                                              捉取時間{2}{0}
+                                              成交價：{3}{0}
+                                              買進價：{4}{0}
+                                              賣出價：{5}{0}
+                                              漲跌：{6}{0}
+                                              成交量：{7}{0}
+                                              昨日收盤價：{8}{0}
+                                              開盤價：{9}{0}
+                                              最高價：{10}{0}
+                                              最低價：{11}{0}
+                                              個股資訊：{12}{0}",
+                                                  System.Environment.NewLine, st.StockID, st.DateTime, st.DealPrice,
+                                                  st.BuyPrice, st.SellPrice, st.UpDown, st.StockQty,
+                                                  st.YesterdayPrice, st.OpenPrice, st.Highest, st.Lowest, st.StockInfo);
             }
-
-            doc = null;
-            docStockContext = null;
-            client = null;
-            ms.Close();
-
             LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
-            
         }
         #endregion
     }
