@@ -54,6 +54,12 @@ namespace WebHook.Controllers
                     GetStock(userMsg.ToUpper());
                 }
 
+                //專門處理關鍵字 - "股價 / 股票"
+                if (userMsg.ToUpper().Contains("匯率"))
+                {
+                    GetExchange(userMsg.ToUpper());
+                }
+
                 //專門處理關鍵字 - "里長嬤"
                 if (userMsg.Contains("里長嬤"))
                 {
@@ -101,7 +107,7 @@ namespace WebHook.Controllers
             int current_random = 0;
 
             // 取得隨機要回覆的訊息
-            current_random = random.Next(0, 10);
+            current_random = random.Next(0, nMsgNumber);
             ResponseMessage[0] = "你今天還好嗎？";
             ResponseMessage[1] = "你今天有運動嗎？";
             ResponseMessage[2] = "不要再吃了哦...";
@@ -222,6 +228,51 @@ namespace WebHook.Controllers
                                                   System.Environment.NewLine, st.StockID.Replace("加到投資組合",""), st.DateTime, st.DealPrice,
                                                   st.BuyPrice, st.SellPrice, st.UpDown.Trim(), st.StockQty,
                                                   st.YesterdayPrice, st.OpenPrice, st.Highest, st.Lowest);
+            }
+            LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
+        }
+        #endregion
+
+        #region 專門處理匯率查詢
+        private void GetExchange(string msg)
+        {
+            // 先處理對話訊息的字眼,只留數字
+            msg = msg.Replace("的", "");
+            msg = msg.Replace("匯率", "");
+
+            List<ExchangeRate> list = new List<ExchangeRate>();
+            HtmlWeb htmlWeb = new HtmlWeb();
+            //強制在讀取網頁的時候，讓編碼是 big5 (若是大陸的網頁要改成 gbxxxx 試看看)
+            htmlWeb.OverrideEncoding = Encoding.GetEncoding("big5");
+
+            //讀取台灣銀行牌告匯率網頁
+            HtmlAgilityPack.HtmlDocument htmlDoc = htmlWeb.Load("http://rate.bot.com.tw/xrt?Lang=zh-TW");
+            htmlDoc.DocumentNode.SelectNodes("/html[1]/body[1]/div[1]/div[4]/table[1]/tbody[1]/tr[1]").
+                AsParallel().ToList().ForEach(ac =>
+                {                   
+                    list.Add(new ExchangeRate
+                    {
+                        Currency = ac.SelectSingleNode("./td[1]/div[1]/div[3]").InnerText,
+                        CashIn = ac.SelectSingleNode("./td[2]").InnerText,
+                        CashOut = ac.SelectSingleNode("./td[3]").InnerText,
+                        SpotIn = ac.SelectSingleNode("./td[4]").InnerText,
+                        SpotOut = ac.SelectSingleNode("./td[5]").InnerText
+                    });
+                });
+            List<ExchangeRate> showlist = new List<ExchangeRate>();
+            if (msg.Contains("今日") || msg == "")
+            {
+                showlist = list;
+            }
+            else
+            {
+                showlist = (List<ExchangeRate>)(from l in list where msg.Contains(l.Currency) select l);
+            }
+            string remsg = string.Empty;
+            foreach (var st in showlist)
+            {
+                remsg += string.Format(@"幣別：{1}{0}買入現金匯率{2}{0}賣出現金匯率：{3}{0}買入即期匯率：{4}{0}賣出即期匯率：{5}{0}{0}",
+                                                  System.Environment.NewLine, st.Currency, st.CashIn, st.CashOut, st.SpotIn, st.SpotOut);
             }
             LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
         }

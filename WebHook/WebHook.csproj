@@ -120,6 +120,7 @@
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
     <Compile Include="Models\AirQulity.cs" />
+    <Compile Include="Models\ExchangeRate.cs" />
     <Compile Include="Models\YahooStock.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
