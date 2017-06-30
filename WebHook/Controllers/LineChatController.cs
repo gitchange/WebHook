@@ -242,37 +242,44 @@ namespace WebHook.Controllers
 
             List<ExchangeRate> list = new List<ExchangeRate>();
             HtmlWeb htmlWeb = new HtmlWeb();
-            //強制在讀取網頁的時候，讓編碼是 big5 (若是大陸的網頁要改成 gbxxxx 試看看)
-            htmlWeb.OverrideEncoding = Encoding.GetEncoding("big5");
+            //因為台銀的網頁非 big5 編碼，所以不強制轉碼
+            //htmlWeb.OverrideEncoding = Encoding.GetEncoding("big5");
 
             //讀取台灣銀行牌告匯率網頁
             HtmlAgilityPack.HtmlDocument htmlDoc = htmlWeb.Load("http://rate.bot.com.tw/xrt?Lang=zh-TW");
-            htmlDoc.DocumentNode.SelectNodes("/html[1]/body[1]/div[1]/div[4]/table[1]/tbody[1]/tr[1]").
-                AsParallel().ToList().ForEach(ac =>
-                {                   
-                    list.Add(new ExchangeRate
-                    {
-                        Currency = ac.SelectSingleNode("./td[1]/div[1]/div[3]").InnerText,
-                        CashIn = ac.SelectSingleNode("./td[2]").InnerText,
-                        CashOut = ac.SelectSingleNode("./td[3]").InnerText,
-                        SpotIn = ac.SelectSingleNode("./td[4]").InnerText,
-                        SpotOut = ac.SelectSingleNode("./td[5]").InnerText
-                    });
+            ExchangeRate er = new ExchangeRate();
+            for (int row = 1; row <= 19; row++)
+            {
+                list.Add(new ExchangeRate
+                {
+                    Currency = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[1]/div[1]/div[3]", row)).InnerText.Trim(),
+                    CashIn = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[2]", row)).InnerText.Trim(),
+                    CashOut = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[3]", row)).InnerText.Trim(),
+                    SpotIn = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[4]", row)).InnerText.Trim(),
+                    SpotOut = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[5]", row)).InnerText.Trim()
                 });
-            List<ExchangeRate> showlist = new List<ExchangeRate>();
+            }
+
+            string remsg = string.Empty;            
             if (msg.Contains("今日") || msg == "")
             {
-                showlist = list;
+                foreach (var st in list)
+                {
+                    remsg += string.Format(@"幣別：{1}{0}買入現金匯率：{2}{0}賣出現金匯率：{3}{0}買入即期匯率：{4}{0}賣出即期匯率：{5}{0}{0}",
+                                                      System.Environment.NewLine, st.Currency, st.CashIn, st.CashOut, st.SpotIn, st.SpotOut);
+                }
             }
             else
             {
-                showlist = (List<ExchangeRate>)(from l in list where msg.Contains(l.Currency) select l);
-            }
-            string remsg = string.Empty;
-            foreach (var st in showlist)
-            {
-                remsg += string.Format(@"幣別：{1}{0}買入現金匯率{2}{0}賣出現金匯率：{3}{0}買入即期匯率：{4}{0}賣出即期匯率：{5}{0}{0}",
-                                                  System.Environment.NewLine, st.Currency, st.CashIn, st.CashOut, st.SpotIn, st.SpotOut);
+                var showlist = (from l in list where l.Currency.Contains(msg) select l);
+                if (showlist.Any())
+                {
+                    foreach (var st in showlist)
+                    {
+                        remsg += string.Format(@"幣別：{1}{0}買入現金匯率：{2}{0}賣出現金匯率：{3}{0}買入即期匯率：{4}{0}賣出即期匯率：{5}{0}{0}",
+                                                          System.Environment.NewLine, st.Currency, st.CashIn, st.CashOut, st.SpotIn, st.SpotOut);
+                    }
+                }
             }
             LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
         }
