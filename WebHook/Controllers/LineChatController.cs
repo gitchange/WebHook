@@ -156,7 +156,7 @@ namespace WebHook.Controllers
                         int nloop = 0;
                         foreach (var rr in result)
                         {
-                            if (nloop > 0) remsg = remsg + "%0D%0A";
+                            if (nloop > 0) remsg = remsg + System.Environment.NewLine;
                             int intPM25 = int.Parse(rr.PM25);
                             if (intPM25 >= 0 || intPM25 <= 35)
                                 recommend = "(舒適，可從事戶外活動)";
