@@ -42,6 +42,12 @@ namespace WebHook.Controllers
                     NewJoin();
                 }
 
+                //專門處理關鍵字 - "/ShowMyID"
+                if (userMsg.ToUpper().Contains("/SHOWMYID"))
+                {
+                    ShowMyID();
+                }
+
                 //專門處理關鍵字 - "PM2.5"
                 if (userMsg.ToUpper().Contains("PM2.5") || userMsg.Contains("空氣品質") || userMsg.Contains("空污"))
                 {
@@ -62,10 +68,9 @@ namespace WebHook.Controllers
 
                 //專門處理關鍵字 - "里長嬤" or "里長伯"
                 if (userMsg.Contains("里長嬤"))
-                {                    
+                {
                     District("里長嬤");
                 }
-
                 if (userMsg.Contains("里長伯"))
                 {
                     District("里長伯");
@@ -75,7 +80,7 @@ namespace WebHook.Controllers
             }
             catch (Exception ex)
             {
-                return Ok();
+                return InternalServerError(new Exception("Error : " + ex.Message.ToString()));
             }
         }
 
@@ -99,15 +104,28 @@ namespace WebHook.Controllers
         }
         #endregion
 
+        #region 專門處理關鍵字 - "/showmyid"
+        private void ShowMyID()
+        {
+            var userInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
+            string Message;
+            //回覆訊息
+            Message = "哈囉！" + userInfo.displayName + "，你的 ID 是：" + userInfo.userId;
+            //回覆用戶
+            isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, Message, ChannelAccessToken);
+            LintBot.PushMessage(userInfo.userId, "哈囉！我是熊熊忘記了，現在主動PO訊息給你");
+        }
+        #endregion
+
         #region 專門處理關鍵字 - "里長嬤、里長伯"
         /// <summary>
         /// 專門處理關鍵字 - "里長嬤、里長伯"
         /// </summary>
         private void District(string pdistrict)
         {
-            int nSex = 0;
+            int nSex = 2;
             int nMsgNumber = 10;
-            string[,] ResponseMessage = new string[nSex,nMsgNumber];
+            string[,] ResponseMessage = new string[nSex, nMsgNumber];
 
             if (pdistrict == "里長嬤") nSex = 0; else nSex = 1;
 
@@ -139,7 +157,7 @@ namespace WebHook.Controllers
             ResponseMessage[1, 9] = "福祭中元節";
 
             //回覆訊息
-            Message = pdistrict + "，" + ResponseMessage[nSex,current_random];
+            Message = pdistrict + "，" + ResponseMessage[nSex, current_random];
             //回覆用戶
             isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, Message, ChannelAccessToken);
 
@@ -148,7 +166,7 @@ namespace WebHook.Controllers
             //var userInfo = bot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
             //bot.PushMessage(myLineID, $"UserName='{userInfo.displayName}' , UserID='{userInfo.userId}' ");
         }
-        #endregion
+        #endregion        
 
         #region 專門處理關鍵字 - "PM2.5"
         /// <summary>
@@ -244,7 +262,7 @@ namespace WebHook.Controllers
             foreach (var st in list)
             {
                 remsg += string.Format(@"股票代碼：{1}{0}捉取時間{2}{0}成交價：{3}{0}買進價：{4}{0}賣出價：{5}{0}漲跌：{6}{0}成交量：{7}{0}昨日收盤價：{8}{0}開盤價：{9}{0}最高價：{10}{0}最低價：{11}{0}",
-                                                  System.Environment.NewLine, st.StockID.Replace("加到投資組合",""), st.DateTime, st.DealPrice,
+                                                  System.Environment.NewLine, st.StockID.Replace("加到投資組合", ""), st.DateTime, st.DealPrice,
                                                   st.BuyPrice, st.SellPrice, st.UpDown.Trim(), st.StockQty,
                                                   st.YesterdayPrice, st.OpenPrice, st.Highest, st.Lowest);
             }
@@ -279,7 +297,7 @@ namespace WebHook.Controllers
                 });
             }
 
-            string remsg = string.Empty;            
+            string remsg = string.Empty;
             if (msg.Contains("今日") || msg == "")
             {
                 foreach (var st in list)
