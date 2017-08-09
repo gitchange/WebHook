@@ -61,11 +61,14 @@ namespace WebHook.Controllers
                 }
 
                 //專門處理關鍵字 - "里長嬤" or "里長伯"
-                if (userMsg.Contains("里長嬤") || userMsg.Contains("里長伯"))
+                if (userMsg.Contains("里長嬤"))
+                {                    
+                    District("里長嬤");
+                }
+
+                if (userMsg.Contains("里長伯"))
                 {
-                    if (userMsg.Contains("里長嬤"))
-                        District("里長嬤");
-                    else District("里長伯");
+                    District("里長伯");
                 }
                 //回覆API OK
                 return Ok();
