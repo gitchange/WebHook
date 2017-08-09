@@ -60,10 +60,12 @@ namespace WebHook.Controllers
                     GetExchange(userMsg.ToUpper());
                 }
 
-                //專門處理關鍵字 - "里長嬤"
-                if (userMsg.Contains("里長嬤"))
+                //專門處理關鍵字 - "里長嬤" or "里長伯"
+                if (userMsg.Contains("里長嬤") || userMsg.Contains("里長伯"))
                 {
-                    District();
+                    if (userMsg.Contains("里長嬤"))
+                        District("里長嬤");
+                    else District("里長伯");
                 }
                 //回覆API OK
                 return Ok();
@@ -94,33 +96,47 @@ namespace WebHook.Controllers
         }
         #endregion
 
-        #region 專門處理關鍵字 - "里長嬤"
+        #region 專門處理關鍵字 - "里長嬤、里長伯"
         /// <summary>
-        /// 專門處理關鍵字 - "里長嬤"
+        /// 專門處理關鍵字 - "里長嬤、里長伯"
         /// </summary>
-        private void District()
+        private void District(string pdistrict)
         {
+            int nSex = 0;
             int nMsgNumber = 10;
-            string[] ResponseMessage = new string[nMsgNumber];
+            string[,] ResponseMessage = new string[nSex,nMsgNumber];
+
+            if (pdistrict == "里長嬤") nSex = 0; else nSex = 1;
+
             string Message;
             Random random = new Random();
             int current_random = 0;
 
             // 取得隨機要回覆的訊息
             current_random = random.Next(0, nMsgNumber);
-            ResponseMessage[0] = "你今天還好嗎？";
-            ResponseMessage[1] = "你今天有運動嗎？";
-            ResponseMessage[2] = "不要再吃了哦...";
-            ResponseMessage[3] = "快出來面對！";
-            ResponseMessage[4] = "你今天還好嗎？";
-            ResponseMessage[5] = "別再假掰了~";
-            ResponseMessage[6] = "你又肚子餓了嗎？";
-            ResponseMessage[7] = "認真點工作";
-            ResponseMessage[8] = "別再睡了！";
-            ResponseMessage[9] = "又敗家了嗎？";
+            ResponseMessage[0, 0] = "你今天還好嗎？";
+            ResponseMessage[0, 1] = "你今天有運動嗎？";
+            ResponseMessage[0, 2] = "不要再吃了哦...";
+            ResponseMessage[0, 3] = "快出來面對！";
+            ResponseMessage[0, 4] = "鳥龜裝很貴耶";
+            ResponseMessage[0, 5] = "別再假掰了~";
+            ResponseMessage[0, 6] = "你又肚子餓了嗎？";
+            ResponseMessage[0, 7] = "認真點工作";
+            ResponseMessage[0, 8] = "別再睡了！";
+            ResponseMessage[0, 9] = "又敗家了嗎？";
+            ResponseMessage[1, 0] = "你今天還好嗎？";
+            ResponseMessage[1, 1] = "麥擱滑手機啊!";
+            ResponseMessage[1, 2] = "不能再吃了哦...";
+            ResponseMessage[1, 3] = "快出來面對！";
+            ResponseMessage[1, 4] = "振作一點...";
+            ResponseMessage[1, 5] = "給你87分，不能再高了";
+            ResponseMessage[1, 6] = "納豆有益身體健康";
+            ResponseMessage[1, 7] = "認真點工作";
+            ResponseMessage[1, 8] = "福源肉粽讚讚讚！";
+            ResponseMessage[1, 9] = "福祭中元節";
 
             //回覆訊息
-            Message = "里長嬤，" + ResponseMessage[current_random];
+            Message = pdistrict + "，" + ResponseMessage[nSex,current_random];
             //回覆用戶
             isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, Message, ChannelAccessToken);
 
