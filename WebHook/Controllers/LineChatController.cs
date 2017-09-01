@@ -124,7 +124,7 @@ namespace WebHook.Controllers
         private void District(string pdistrict)
         {
             int nSex = 2;
-            int nMsgNumber = 10;
+            int nMsgNumber = 12;
             string[,] ResponseMessage = new string[nSex, nMsgNumber];
 
             if (pdistrict == "里長嬤") nSex = 0; else nSex = 1;
@@ -136,25 +136,29 @@ namespace WebHook.Controllers
             // 取得隨機要回覆的訊息
             current_random = random.Next(0, nMsgNumber);
             ResponseMessage[0, 0] = "你今天還好嗎？";
-            ResponseMessage[0, 1] = "你今天有運動嗎？";
+            ResponseMessage[0, 1] = "鋰鎂銅鋰鋅";
             ResponseMessage[0, 2] = "不要再吃了哦...";
             ResponseMessage[0, 3] = "快出來面對！";
-            ResponseMessage[0, 4] = "鳥龜裝很貴耶";
-            ResponseMessage[0, 5] = "別再假掰了~";
-            ResponseMessage[0, 6] = "你又肚子餓了嗎？";
-            ResponseMessage[0, 7] = "認真點工作";
-            ResponseMessage[0, 8] = "別再睡了！";
-            ResponseMessage[0, 9] = "又敗家了嗎？";
+            ResponseMessage[0, 4] = "里長伯說你不要只會嘴砲，多說無益！";
+            ResponseMessage[0, 5] = "鳥龜裝，貴森森";
+            ResponseMessage[0, 6] = "別再假掰了~";
+            ResponseMessage[0, 7] = "你又肚子餓了嗎？";
+            ResponseMessage[0, 8] = "啊不就好棒棒";
+            ResponseMessage[0, 9] = "別再睡了！";
+            ResponseMessage[0, 10] = "三姑加六婆，沒人你對手";
+            ResponseMessage[0, 11] = "又敗家了嗎？";
             ResponseMessage[1, 0] = "你今天還好嗎？";
             ResponseMessage[1, 1] = "麥擱滑手機啊!";
             ResponseMessage[1, 2] = "不能再吃了哦...";
             ResponseMessage[1, 3] = "快出來面對！";
             ResponseMessage[1, 4] = "振作一點...";
             ResponseMessage[1, 5] = "給你87分，不能再高了";
-            ResponseMessage[1, 6] = "納豆有益身體健康";
-            ResponseMessage[1, 7] = "認真點工作";
-            ResponseMessage[1, 8] = "福源肉粽讚讚讚！";
-            ResponseMessage[1, 9] = "福祭中元節";
+            ResponseMessage[1, 6] = "吃納豆有益身體健康";
+            ResponseMessage[1, 7] = "94狂！";
+            ResponseMessage[1, 8] = "嘉義福源肉粽讚讚讚！";
+            ResponseMessage[1, 9] = "全家來買菜，福祭中元節";
+            ResponseMessage[1, 10] = "很多運動不需要穿運動鞋哦！";
+            ResponseMessage[1, 11] = "假的，哎呀我的眼睛業障重啊！";
 
             //回覆訊息
             Message = pdistrict + "，" + ResponseMessage[nSex, current_random];
