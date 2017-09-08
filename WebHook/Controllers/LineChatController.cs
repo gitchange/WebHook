@@ -11,6 +11,9 @@ using System.IO;
 using HtmlAgilityPack;
 using System.Text;
 using System.Text.RegularExpressions;
+using maduka_QnAMakerLibrary;
+using maduka_QnAMakerLibrary.Interface;
+using System.Web.Configuration;
 
 namespace WebHook.Controllers
 {
@@ -21,7 +24,18 @@ namespace WebHook.Controllers
         protected string myLineID = "Ub7edd29f9ec12e41b1eae1c11baa733d";
         protected isRock.LineBot.ReceievedMessage ReceivedMessage;
         protected isRock.LineBot.Bot LintBot;
+        protected isRock.LineBot.LineUserInfo userInfo;
+        protected string username = string.Empty;
+        /// <summary>
+        /// Microsoft QnA Maker 訂閱的金鑰字串設定
+        /// </summary>
+        protected string SubscriptionKey = WebConfigurationManager.AppSettings["SubscriptionKey"].ToString();
+        /// <summary>
+        /// Microsoft QnA Maker knowledge bases ID
+        /// </summary>
+        protected string strKbId = WebConfigurationManager.AppSettings["kbId"].ToString();
 
+        #region LineBOT 主程式 - 取得使用者、訊息資訊及判斷該如何處理回覆
         [HttpPost]
         public async Task<IHttpActionResult> POSTAsync()
         {
@@ -33,6 +47,22 @@ namespace WebHook.Controllers
                 ReceivedMessage = isRock.LineBot.Utility.Parsing(postData);
                 //建立 Line BOT
                 LintBot = new isRock.LineBot.Bot(ChannelAccessToken);
+                //取得 User 的資訊
+                userInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
+                switch (userInfo.displayName.Trim())
+                {
+                    case "熊寶寶":
+                        username = "熊寶";
+                        break;
+                    case "蔡福元":
+                        username = "里長伯";
+                        break;
+                    case "Maggie":
+                        username = "里長嬤";
+                        break;
+                    default:
+                        break;
+                }
                 //取得 User 所 PO 的訊息
                 string userMsg = ReceivedMessage.events[0].message.text;
 
@@ -66,6 +96,12 @@ namespace WebHook.Controllers
                     GetExchange(userMsg.ToUpper());
                 }
 
+                //專門處理 Q & A ：前置字元為"熊熊："
+                if (userMsg.Contains("熊熊：") || userMsg.Contains("熊熊，"))
+                {
+                    QNAMaker(userMsg);
+                }
+
                 //專門處理關鍵字 - "里長嬤" or "里長伯"
                 if (userMsg.Contains("里長嬤"))
                 {
@@ -83,6 +119,180 @@ namespace WebHook.Controllers
                 return InternalServerError(new Exception("Error : " + ex.Message.ToString()));
             }
         }
+        #endregion
+
+        #region "處理 Q & A Maker https://qnamaker.ai/"
+
+        #region 主程式判斷要進入哪一個子程序
+        /// <summary>
+        /// 主程式判斷要進入哪一個子程序
+        /// </summary>
+        /// <param name="pQuestion"></param>
+        private void QNAMaker(string pQuestion)
+        {
+            string pquestion = pQuestion.Replace("熊熊：", "").Replace("熊熊，", "");
+
+            if (pQuestion == "熊熊：" || pQuestion == "熊熊，")       //如果只是呼叫熊熊：，就回答什麼事
+            {
+                LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, string.Format("{0},{1}", userInfo.displayName, "什麼事？"));
+            }
+            else                            //如果熊熊：後面還有字串，就開始由微軟處理 Q & A 回應
+            {
+                if (pQuestion.ToUpper().Contains("ADDQ:") && pQuestion.ToUpper().Contains("ADDA:"))
+                    QNAMakerAddQnA(pquestion);
+                else
+                {
+                    if (pQuestion.ToUpper().Contains("(UPDATE)"))
+                    {
+                        QNAMakerUpdate();
+                    }
+                    else QNAMakerGenerateAnswer(pquestion);
+                }
+            }
+        }
+        #endregion
+
+        #region 處理 Train & Publish
+        /// <summary>
+        /// 處理 Train & Publish
+        /// </summary>
+        private void QNAMakerUpdate()
+        {
+            string trainMsg, publishMsg;
+            maduka_QnAMakerLibrary.API.QnAMaker QNAMaker = new maduka_QnAMakerLibrary.API.QnAMaker();
+            QNAMaker.SubscriptionKey = SubscriptionKey;
+            HttpStatusCode code = HttpStatusCode.OK;
+            QNAMaker.TrainKB(strKbId, out code);
+            if (code == HttpStatusCode.NoContent)
+                trainMsg = "Train KB Success";
+            else
+                trainMsg = "Train KB Fail:" + code.ToString();
+
+            QNAMaker.PublishKB(strKbId, out code);
+
+            if (code == HttpStatusCode.NoContent)
+                publishMsg = "Publish KB Success";
+            else
+                publishMsg = "Publish KB Fail:" + code.ToString();
+
+            LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, string.Format("{0}，{1} ; {2}", username, trainMsg, publishMsg));
+        }
+        #endregion
+
+        #region 處理新增 Knowledge Base Q & A 問題
+        /// <summary>
+        /// 處理新增 Knowledge Base Q & A 問題
+        /// </summary>
+        /// <param name="pquestion"></param>
+        private void QNAMakerAddQnA(string pquestion)
+        {
+            List<KBModel.QnAQueryList> objQnA = new List<KBModel.QnAQueryList>();
+            KBModel.UpdateKBModel objUpdate = new KBModel.UpdateKBModel()
+            {
+                add = new KBModel.UpdateKBModel.Add()
+                {
+                    qnaPairs = new List<KBModel.QnAList>(),
+                    urls = new List<string>()
+                },
+                delete = new KBModel.UpdateKBModel.Delete()
+                {
+                    qnaPairs = new List<KBModel.QnAList>()
+                },
+            };
+
+            int startQ = pquestion.IndexOf("AddQ:");
+            int startA = pquestion.IndexOf("AddA:");
+            string AddQ = pquestion.Substring(startQ + 5, startA - 5);
+            string AddA = pquestion.Substring(startA + 5);
+            Console.WriteLine(AddQ.Trim());
+            Console.WriteLine(AddA.Trim());
+
+            objQnA.Add(
+                new KBModel.QnAQueryList()
+                {
+                    answer = AddA.Trim(),
+                    question = AddQ.Trim(),
+                    source = "add",
+                }
+            );
+
+            for (int i = 0; i < objQnA.Count; i++)
+            {
+                if (objQnA[i].source == "delete")
+                {
+                    objUpdate.delete.qnaPairs.Add(new KBModel.QnAList()
+                    {
+                        answer = objQnA[i].answer,
+                        question = objQnA[i].question,
+                    }
+                    );
+                }
+                else if (objQnA[i].source == "add")
+                {
+                    objUpdate.add.qnaPairs.Add(new KBModel.QnAList()
+                    {
+                        answer = objQnA[i].answer,
+                        question = objQnA[i].question,
+                    }
+                    );
+                }
+            }
+
+            maduka_QnAMakerLibrary.API.QnAMaker QNAMaker = new maduka_QnAMakerLibrary.API.QnAMaker();
+            QNAMaker.SubscriptionKey = SubscriptionKey;
+            HttpStatusCode code = HttpStatusCode.OK;
+            string strMsg = QNAMaker.UpdateKB(strKbId, objUpdate, out code);
+
+            if (code == HttpStatusCode.NoContent)
+            {
+                LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, string.Format("{0}，{1}", username, "Update KB Success"));
+            }
+            else
+            {
+                LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, "Update KB Fail:" + code.ToString());
+            }
+        }
+        #endregion
+
+        #region 處理送出 Question 取回 Answer
+        /// <summary>
+        /// 處理送出 Question 取回 Answer
+        /// </summary>
+        /// <param name="pquestion"></param>
+        private void QNAMakerGenerateAnswer(string pquestion)
+        {
+            KBModel.GenerateAnswerModel objQuery = new KBModel.GenerateAnswerModel()
+            {
+                question = pquestion,
+                top = 1,
+            };
+            maduka_QnAMakerLibrary.API.QnAMaker QNAMaker = new maduka_QnAMakerLibrary.API.QnAMaker();
+            QNAMaker.SubscriptionKey = SubscriptionKey;
+            HttpStatusCode code = HttpStatusCode.OK;
+            KBModel.GenerateAnswerResultModel result = QNAMaker.GenerateAnswer(strKbId, objQuery, out code);
+            string remsg = string.Empty;
+
+            if (code == HttpStatusCode.OK)
+            {
+                // 取出最相似的回覆，並放在文字方塊中
+                if (result.answers.Count > 0)
+                {
+                    remsg = string.Format("{0}，{1}", username, result.answers[0].answer);
+                }
+                else
+                {
+                    remsg = string.Format("{0}，{1}", username, "哩哄啥，哇聽某！");
+                }
+                LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
+            }
+            else
+            {
+                LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, "Generate Answer Fail:" + code.ToString());
+            }
+        }
+        #endregion
+
+        #endregion
 
         #region 新朋友來了(或解除封鎖)
         /// <summary>
@@ -90,7 +300,7 @@ namespace WebHook.Controllers
         /// </summary>
         private void NewJoin()
         {
-            var userInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
+            //var userInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
             var groupInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.groupId);
             var roomInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.roomId);
 
@@ -107,7 +317,7 @@ namespace WebHook.Controllers
         #region 專門處理關鍵字 - "/showmyid"
         private void ShowMyID()
         {
-            var userInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
+            //var userInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
             string Message;
             //回覆訊息
             Message = "哈囉！" + userInfo.displayName + "，你的 ID 是：" + userInfo.userId;
