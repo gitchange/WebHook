@@ -306,11 +306,11 @@ namespace WebHook.Controllers
 
             //bot.ReplyMessage(ReceivedMessage.events.FirstOrDefault().replyToken, $"哈，'{userInfo.displayName}' 你來了...歡迎");
 
-            LintBot.ReplyMessage(ReceivedMessage.events.FirstOrDefault().replyToken, $"哈囉！'{userInfo.displayName}'，我回來了...GroupID='{groupInfo.userId}'");
+            //LintBot.ReplyMessage(ReceivedMessage.events.FirstOrDefault().replyToken, $"哈囉！'{userInfo.displayName}'，我回來了...GroupID='{groupInfo.userId}'");
 
-            LintBot.PushMessage(myLineID, $"UserName='{userInfo.displayName}' , UserID='{userInfo.userId}' ");
-            LintBot.PushMessage(myLineID, $"GroupName='{groupInfo.displayName}' , GroupID='{groupInfo.userId}' ");
-            LintBot.PushMessage(myLineID, $"RoomName='{roomInfo.displayName}' , RoomID='{roomInfo.userId}' ");
+            LintBot.PushMessage(myLineID, string.Format("UserName={0} ; UserID={1}", userInfo.displayName, userInfo.userId));
+            LintBot.PushMessage(myLineID, string.Format("GroupName={0} ; GropuID={1}", groupInfo.displayName, groupInfo.userId));
+            LintBot.PushMessage(myLineID, string.Format("RoomName={0} ; RoomID={1}", roomInfo.displayName, roomInfo.userId));
         }
         #endregion
 
@@ -318,11 +318,16 @@ namespace WebHook.Controllers
         private void ShowMyID()
         {
             //var userInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
+            //var groupInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.groupId);
+            //var roomInfo = LintBot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.roomId);
             string Message;
             //回覆訊息
             Message = "哈囉！" + userInfo.displayName + "，你的 ID 是：" + userInfo.userId;
             //回覆用戶
             isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, Message, ChannelAccessToken);
+            //LintBot.PushMessage(userInfo.userId, string.Format("UserName={0} ; UserID={1}", userInfo.displayName, userInfo.userId));
+            //LintBot.PushMessage(userInfo.userId, string.Format("GroupName={0} ; GropuID={1}", groupInfo.displayName, groupInfo.userId));
+            //LintBot.PushMessage(userInfo.userId, string.Format("RoomName={0} ; RoomID={1}", roomInfo.displayName, roomInfo.userId));
             LintBot.PushMessage(userInfo.userId, "哈囉！我是熊熊忘記了，現在主動PO訊息給你");
         }
         #endregion
