@@ -14,14 +14,14 @@ using System.Text.RegularExpressions;
 using maduka_QnAMakerLibrary;
 using maduka_QnAMakerLibrary.Interface;
 using System.Web.Configuration;
+using Hangfire;
 
 namespace WebHook.Controllers
 {
     public class LineChatController : ApiController
-    {
-
-        protected string ChannelAccessToken = "JZilAUe52oNviAO0pnqMs/Ukz+kumvYmQFExILnBdB/PfBtgITd8TRbbT1Zdakn9mCwQ4QdSHYz78QqCI8gpUWJ5Kv4E23iqlgWV0HmWecXGU/CO3S4lfbYFlb10m1sWi184xfuujnJ4y1WXvJFwMwdB04t89/1O/w1cDnyilFU=";
-        protected string myLineID = "Ub7edd29f9ec12e41b1eae1c11baa733d";
+    {        
+        protected string ChannelAccessToken = WebConfigurationManager.AppSettings["ChannelAccessToken"].ToString();
+        protected string myLineID = WebConfigurationManager.AppSettings["BobobearID"].ToString();
         protected isRock.LineBot.ReceievedMessage ReceivedMessage;
         protected isRock.LineBot.Bot LintBot;
         protected isRock.LineBot.LineUserInfo userInfo;
@@ -34,6 +34,17 @@ namespace WebHook.Controllers
         /// Microsoft QnA Maker knowledge bases ID
         /// </summary>
         protected string strKbId = WebConfigurationManager.AppSettings["kbId"].ToString();
+
+        #region 啟動排程
+        // GET: api/LineChat
+        public async Task<IHttpActionResult> GetAsync()
+        {
+            string pm25 = await GetAirQulity("善化");            
+            RecurringJob.AddOrUpdate(() => CallLineBot(LintBot,"我是熊熊忘記了，該吃午飯了"), "*/3 * * * *");
+
+            return Ok();
+        }
+        #endregion        
 
         #region LineBOT 主程式 - 取得使用者、訊息資訊及判斷該如何處理回覆
         [HttpPost]
@@ -81,7 +92,9 @@ namespace WebHook.Controllers
                 //專門處理關鍵字 - "PM2.5"
                 if (userMsg.ToUpper().Contains("PM2.5") || userMsg.Contains("空氣品質") || userMsg.Contains("空污"))
                 {
-                    await GetAirQulity(userMsg.ToUpper());
+                    //await GetAirQulity(userMsg.ToUpper());
+                    string pm25 = await GetAirQulity(userMsg.ToUpper());
+                    CallLineBot(LintBot,pm25);
                 }
 
                 //專門處理關鍵字 - "股價 / 股票"
@@ -96,13 +109,16 @@ namespace WebHook.Controllers
                     GetExchange(userMsg.ToUpper());
                 }
 
-                //專門處理 Q & A ：前置字元為"熊熊："
-                if (userMsg.Contains("熊熊：") || userMsg.Contains("熊熊，"))
-                {
-                    QNAMaker(userMsg);
-                }
+                ////專門處理 Q & A ：前置字元為"熊熊："
+                //if (userMsg.Contains("熊熊：") || userMsg.Contains("熊熊，"))
+                //{
+                //    QNAMaker(userMsg);
+                //}
 
-                //專門處理關鍵字 - "里長嬤" or "里長伯"
+                // 先處理以上含有特殊關鍵字，若未含特殊關鍵字就丟 Q&A (不用再判斷是否有"熊熊，"開頭)
+                QNAMaker(userMsg);
+
+                //若 Q&A 沒有處理到，就專門處理關鍵字 - "里長嬤" or "里長伯"
                 if (userMsg.Contains("里長嬤"))
                 {
                     District("里長嬤");
@@ -118,6 +134,15 @@ namespace WebHook.Controllers
             {
                 return InternalServerError(new Exception("Error : " + ex.Message.ToString()));
             }
+        }
+        #endregion
+
+        #region Call LineBot to Push Message
+        public static void CallLineBot(isRock.LineBot.Bot linebot , string pmsg)
+        {
+            string myLineID = "Ub7edd29f9ec12e41b1eae1c11baa733d";
+            linebot.PushMessage(myLineID, pmsg);
+            //LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, pmsg);
         }
         #endregion
 
@@ -274,16 +299,28 @@ namespace WebHook.Controllers
 
             if (code == HttpStatusCode.OK)
             {
-                // 取出最相似的回覆，並放在文字方塊中
-                if (result.answers.Count > 0)
+                // 取出最相似的回覆，並放在文字方塊中==> 以下程式碼取消，因為就算 match 不到，系統也會回覆：No good match found in the KB (Count = 1)
+                //if (result.answers.Count > 0)
+                //{
+                //    remsg = string.Format("{0}，{1}({2})", username, result.answers[0].answer, result.answers[0].score);
+                //}
+                //else
+                //{
+                //    remsg = string.Format("{0}，{1}", username, "哩哄啥，哇聽某！");
+                //}
+
+                // 取出回覆的分數是 >= 50 ==> 改採用分數來判斷，如果不到規定的分數就完全不理會
+                if (result.answers[0].score >= 50)
                 {
-                    remsg = string.Format("{0}，{1}", username, result.answers[0].answer);
+                    //處理回覆內容中是否已含了自己的名稱，如果有，就不再加稱呼，
+                    if (result.answers[0].answer.Contains(username))
+                        remsg = string.Format("{0}(Score={1})", result.answers[0].answer, result.answers[0].score);
+                    else
+                        remsg = string.Format("{0}，{1}(Score={2})", username, result.answers[0].answer, result.answers[0].score);
+
+                    LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
                 }
-                else
-                {
-                    remsg = string.Format("{0}，{1}", username, "哩哄啥，哇聽某！");
-                }
-                LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
+
             }
             else
             {
@@ -328,7 +365,8 @@ namespace WebHook.Controllers
             //LintBot.PushMessage(userInfo.userId, string.Format("UserName={0} ; UserID={1}", userInfo.displayName, userInfo.userId));
             //LintBot.PushMessage(userInfo.userId, string.Format("GroupName={0} ; GropuID={1}", groupInfo.displayName, groupInfo.userId));
             //LintBot.PushMessage(userInfo.userId, string.Format("RoomName={0} ; RoomID={1}", roomInfo.displayName, roomInfo.userId));
-            LintBot.PushMessage(userInfo.userId, "哈囉！我是熊熊忘記了，現在主動PO訊息給你");
+            LintBot.PushMessage(userInfo.userId, string.Format("哈囉！我是熊熊忘記了，現在主動PO訊息給你。{0} 的 Line ID 是 {1}", userInfo.displayName, userInfo.userId));
+            CallLineBot(LintBot, "我是熊熊忘記了，該吃午飯了");
         }
         #endregion
 
@@ -355,13 +393,13 @@ namespace WebHook.Controllers
             ResponseMessage[0, 2] = "不要再吃了哦...";
             ResponseMessage[0, 3] = "快出來面對！";
             ResponseMessage[0, 4] = "里長伯說你不要只會嘴砲，多說無益！";
-            ResponseMessage[0, 5] = "鳥龜裝，貴森森";
+            ResponseMessage[0, 5] = "幫爸爸洗一次腳，或者捶一次背，梳一次頭，剪一次指甲，回味爸爸曾經為你所做的事情";
             ResponseMessage[0, 6] = "別再假掰了~";
             ResponseMessage[0, 7] = "你又肚子餓了嗎？";
             ResponseMessage[0, 8] = "啊不就好棒棒";
             ResponseMessage[0, 9] = "別再睡了！";
-            ResponseMessage[0, 10] = "三姑加六婆，沒人你對手";
-            ResponseMessage[0, 11] = "又敗家了嗎？";
+            ResponseMessage[0, 10] = "我森七七";
+            ResponseMessage[0, 11] = "別再敗家了...";
             ResponseMessage[1, 0] = "你今天還好嗎？";
             ResponseMessage[1, 1] = "麥擱滑手機啊!";
             ResponseMessage[1, 2] = "不能再吃了哦...";
@@ -391,14 +429,15 @@ namespace WebHook.Controllers
         /// <summary>
         /// 專門處理關鍵字 - "PM2.5"
         /// </summary>
-        public async Task GetAirQulity(string msg)
+        public async Task<string> GetAirQulity(string msg)
         {
-            const string targetURL = "http://opendata.epa.gov.tw/ws/Data/REWXQA/?%24orderby=SiteName&%24skip=0&%24top=1000&format=json";
+            // 政府資料開放平台 - 空氣品質指標(AQI) : https://data.gov.tw/dataset/40448
+            const string targetURL = "http://opendata2.epa.gov.tw/AQI.json";
+            string remsg = string.Empty;
             try
             {
                 using (HttpClient client = new HttpClient())
                 {
-
                     client.MaxResponseContentBufferSize = Int32.MaxValue;
                     var response = await client.GetStringAsync(targetURL);
                     var collection = JsonConvert.DeserializeObject<IEnumerable<AirQulity>>(response.Replace("PM2.5", "PM25"));
@@ -407,7 +446,6 @@ namespace WebHook.Controllers
                                   select c);
                     if (result.Any())
                     {
-                        string remsg = string.Empty;
                         string recommend = string.Empty;
                         int nloop = 0;
                         foreach (var rr in result)
@@ -428,19 +466,18 @@ namespace WebHook.Controllers
                             remsg = remsg + string.Format("{0}的 PM2.5數值為{1} {2}", rr.SiteName, rr.PM25, recommend);
                             nloop++;
                         }
-                        LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
                     }
                     else
                     {
-                        LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, "無法識別你所指定的地區，總之，快去買一台 Cado 回家就對了...");
+                        remsg = "無法識別你所指定的地區，總之，快去買一台 Cado 回家就對了...";
                     }
                 }
             }
             catch (Exception ex)
             {
-                LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, ex.Message);
+                remsg = ex.Message;
             }
-            return;
+            return remsg;
         }
         #endregion
 
