@@ -143,8 +143,10 @@
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
     <Compile Include="Models\AirQulity.cs" />
+    <Compile Include="Models\CallFunction.cs" />
     <Compile Include="Models\ExchangeRate.cs" />
     <Compile Include="Models\MyAuthorizationFilter.cs" />
+    <Compile Include="Models\PushMsg.cs" />
     <Compile Include="Models\YahooStock.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Startup.cs" />

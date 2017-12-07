@@ -7,24 +7,25 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
 using WebHook.Models;
-using System.IO;
 using HtmlAgilityPack;
 using System.Text;
 using System.Text.RegularExpressions;
 using maduka_QnAMakerLibrary;
-using maduka_QnAMakerLibrary.Interface;
 using System.Web.Configuration;
 using Hangfire;
+using isRock.LineBot;
+
 
 namespace WebHook.Controllers
 {
     public class LineChatController : ApiController
     {        
         protected string ChannelAccessToken = WebConfigurationManager.AppSettings["ChannelAccessToken"].ToString();
-        protected string myLineID = WebConfigurationManager.AppSettings["BobobearID"].ToString();
-        protected isRock.LineBot.ReceievedMessage ReceivedMessage;
-        protected isRock.LineBot.Bot LintBot;
-        protected isRock.LineBot.LineUserInfo userInfo;
+        protected string myLineID = WebConfigurationManager.AppSettings["BobobearID"].ToString();               
+        protected ReceievedMessage ReceivedMessage;
+        protected Bot LintBot;
+        protected LineUserInfo userInfo;
+        protected string postData = string.Empty;
         protected string username = string.Empty;
         /// <summary>
         /// Microsoft QnA Maker 訂閱的金鑰字串設定
@@ -36,11 +37,18 @@ namespace WebHook.Controllers
         protected string strKbId = WebConfigurationManager.AppSettings["kbId"].ToString();
 
         #region 啟動排程
-        // GET: api/LineChat
+        // GET: api/LineChat        
         public async Task<IHttpActionResult> GetAsync()
+        //public IHttpActionResult Get()
         {
-            string pm25 = await GetAirQulity("善化");            
-            RecurringJob.AddOrUpdate(() => CallLineBot(LintBot,"我是熊熊忘記了，該吃午飯了"), "*/3 * * * *");
+            string pm25 = await CallFunction.GetAirQulity("善化 嘉義 新營 的空污");
+            string pm25on = "大家早！以下是三處的空污狀況，祝各位出門順心，一路平安！" + Environment.NewLine + pm25;
+            string pm25off = "啾咪！以下是三處的空污狀況，祝各位下班順心，一路平安！" + Environment.NewLine + pm25;
+
+
+            //await CallFunction.CallLineAPIPushMessage(pm25);
+            //RecurringJob.AddOrUpdate(() => CallFunction.CallLineAPIPushMessage(pm25), "*/3 * * * *");            
+            RecurringJob.AddOrUpdate(() => CallFunction.CallLineAPIPushMessage(pm25off), Cron.Daily(17, 0));            
 
             return Ok();
         }
@@ -53,7 +61,7 @@ namespace WebHook.Controllers
             try
             {
                 //取得 http Post RawData(should be JSON)
-                string postData = Request.Content.ReadAsStringAsync().Result;
+                postData = Request.Content.ReadAsStringAsync().Result;
                 //剖析JSON
                 ReceivedMessage = isRock.LineBot.Utility.Parsing(postData);
                 //建立 Line BOT
@@ -92,9 +100,10 @@ namespace WebHook.Controllers
                 //專門處理關鍵字 - "PM2.5"
                 if (userMsg.ToUpper().Contains("PM2.5") || userMsg.Contains("空氣品質") || userMsg.Contains("空污"))
                 {
-                    //await GetAirQulity(userMsg.ToUpper());
-                    string pm25 = await GetAirQulity(userMsg.ToUpper());
-                    CallLineBot(LintBot,pm25);
+                    string pm25 = await CallFunction.GetAirQulity(userMsg.ToUpper());
+                    isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, pm25, ChannelAccessToken);
+                    //LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, pm25);
+                    
                 }
 
                 //專門處理關鍵字 - "股價 / 股票"
@@ -134,15 +143,6 @@ namespace WebHook.Controllers
             {
                 return InternalServerError(new Exception("Error : " + ex.Message.ToString()));
             }
-        }
-        #endregion
-
-        #region Call LineBot to Push Message
-        public static void CallLineBot(isRock.LineBot.Bot linebot , string pmsg)
-        {
-            string myLineID = "Ub7edd29f9ec12e41b1eae1c11baa733d";
-            linebot.PushMessage(myLineID, pmsg);
-            //LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, pmsg);
         }
         #endregion
 
@@ -365,8 +365,8 @@ namespace WebHook.Controllers
             //LintBot.PushMessage(userInfo.userId, string.Format("UserName={0} ; UserID={1}", userInfo.displayName, userInfo.userId));
             //LintBot.PushMessage(userInfo.userId, string.Format("GroupName={0} ; GropuID={1}", groupInfo.displayName, groupInfo.userId));
             //LintBot.PushMessage(userInfo.userId, string.Format("RoomName={0} ; RoomID={1}", roomInfo.displayName, roomInfo.userId));
-            LintBot.PushMessage(userInfo.userId, string.Format("哈囉！我是熊熊忘記了，現在主動PO訊息給你。{0} 的 Line ID 是 {1}", userInfo.displayName, userInfo.userId));
-            CallLineBot(LintBot, "我是熊熊忘記了，該吃午飯了");
+            LintBot.PushMessage(myLineID, string.Format("哈囉！我是熊熊忘記了，現在主動PO訊息給你。{0} 的 Line ID 是 {1}", userInfo.displayName, userInfo.userId));
+            LintBot.PushMessage(myLineID, string.Format("POST內容為：{0}", postData));            
         }
         #endregion
 
@@ -417,70 +417,14 @@ namespace WebHook.Controllers
             Message = pdistrict + "，" + ResponseMessage[nSex, current_random];
             //回覆用戶
             isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, Message, ChannelAccessToken);
-
+            
             // 暫時測試
             //isRock.LineBot.Bot bot = new isRock.LineBot.Bot(ChannelAccessToken);
             //var userInfo = bot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
             //bot.PushMessage(myLineID, $"UserName='{userInfo.displayName}' , UserID='{userInfo.userId}' ");
         }
         #endregion        
-
-        #region 專門處理關鍵字 - "PM2.5"
-        /// <summary>
-        /// 專門處理關鍵字 - "PM2.5"
-        /// </summary>
-        public async Task<string> GetAirQulity(string msg)
-        {
-            // 政府資料開放平台 - 空氣品質指標(AQI) : https://data.gov.tw/dataset/40448
-            const string targetURL = "http://opendata2.epa.gov.tw/AQI.json";
-            string remsg = string.Empty;
-            try
-            {
-                using (HttpClient client = new HttpClient())
-                {
-                    client.MaxResponseContentBufferSize = Int32.MaxValue;
-                    var response = await client.GetStringAsync(targetURL);
-                    var collection = JsonConvert.DeserializeObject<IEnumerable<AirQulity>>(response.Replace("PM2.5", "PM25"));
-                    var result = (from c in collection
-                                  where msg.Contains(c.SiteName)
-                                  select c);
-                    if (result.Any())
-                    {
-                        string recommend = string.Empty;
-                        int nloop = 0;
-                        foreach (var rr in result)
-                        {
-                            if (nloop > 0) remsg = remsg + System.Environment.NewLine;
-                            int intPM25 = int.Parse(rr.PM25);
-                            if (intPM25 >= 0 || intPM25 <= 35)
-                                recommend = "(舒適，可從事戶外活動)";
-                            else
-                                if (intPM25 >= 36 || intPM25 <= 53)
-                                recommend = "(舒適尚可，可從事戶外活動，但應考慮減少體力消耗)";
-                            else
-                                if (intPM25 >= 54 || intPM25 <= 70)
-                                recommend = "(任何人如果有不適，如眼痛，咳嗽或喉嚨痛等，應該考慮減少戶外活動)";
-                            else
-                                if (intPM25 >= 71) recommend = "(任何人如果有不適，如眼痛，咳嗽或喉嚨痛等，應減少體力消耗，特別是減少戶外活動)";
-
-                            remsg = remsg + string.Format("{0}的 PM2.5數值為{1} {2}", rr.SiteName, rr.PM25, recommend);
-                            nloop++;
-                        }
-                    }
-                    else
-                    {
-                        remsg = "無法識別你所指定的地區，總之，快去買一台 Cado 回家就對了...";
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                remsg = ex.Message;
-            }
-            return remsg;
-        }
-        #endregion
-
+        
         #region 專門處理股價查詢
         private void GetStock(string msg)
         {
