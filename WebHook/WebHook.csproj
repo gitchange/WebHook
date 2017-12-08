@@ -133,7 +133,9 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Global.asax" />
-    <Content Include="Web.config" />
+    <Content Include="Web.config">
+      <SubType>Designer</SubType>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="App_Start\WebApiConfig.cs" />
@@ -145,6 +147,7 @@
     <Compile Include="Models\AirQulity.cs" />
     <Compile Include="Models\CallFunction.cs" />
     <Compile Include="Models\ExchangeRate.cs" />
+    <Compile Include="Models\Jobs.cs" />
     <Compile Include="Models\MyAuthorizationFilter.cs" />
     <Compile Include="Models\PushMsg.cs" />
     <Compile Include="Models\YahooStock.cs" />

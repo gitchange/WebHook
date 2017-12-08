@@ -6,6 +6,9 @@ using Hangfire;
 using Hangfire.MemoryStorage;
 using WebHook.Models;
 using System.Web.Http;
+using Hangfire.Common;
+using Hangfire.States;
+using Hangfire.Storage;
 
 [assembly: OwinStartup(typeof(WebHook.Startup))]
 namespace WebHook
@@ -23,6 +26,7 @@ namespace WebHook
 
             // 指定Hangfire使用記憶體儲存任務
             Hangfire.GlobalConfiguration.Configuration.UseMemoryStorage();
+            GlobalJobFilters.Filters.Add(new OneYearExpirationTimeAttribute());
 
             app.UseHangfireDashboard("/watchjobs", new DashboardOptions
             {
@@ -33,6 +37,19 @@ namespace WebHook
             // 啟用Hangfire的Dashboard
             //app.UseHangfireDashboard();            
             app.UseHangfireDashboard("/watchjobs");            
+        }
+    }
+
+    public class OneYearExpirationTimeAttribute : JobFilterAttribute, IApplyStateFilter
+    {
+        public void OnStateUnapplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
+        {
+            context.JobExpirationTimeout = TimeSpan.FromDays(365);
+        }
+
+        public void OnStateApplied(ApplyStateContext context, IWriteOnlyTransaction transaction)
+        {
+            context.JobExpirationTimeout = TimeSpan.FromDays(365);
         }
     }
 }

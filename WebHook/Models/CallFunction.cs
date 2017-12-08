@@ -1,43 +1,15 @@
-﻿using Newtonsoft.Json;
+﻿using HtmlAgilityPack;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Threading.Tasks;
-using System.Web;
-using System.Web.Configuration;
 
 namespace WebHook.Models
 {
     public static class CallFunction
     {
-        #region
-        public static async Task<string> CallLineAPIPushMessage(string pmsg)
-        {
-            string uri = "https://api.line.me/v2/bot/message/push";
-            string ChannelAccessToken = WebConfigurationManager.AppSettings["ChannelAccessToken"].ToString();
-            string DistrictGroup = WebConfigurationManager.AppSettings["DistrictGroup"].ToString();                       
-            string result = string.Empty;
-            using (HttpClient client = new HttpClient())
-            {
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ChannelAccessToken);
-                PushMsg pm = new PushMsg();
-                pm.to = DistrictGroup;
-                pm.messages = new List<PushMsgTxt>();
-                pm.messages.Add(new PushMsgTxt { type = "text", text = pmsg });
-                string json = JsonConvert.SerializeObject(pm);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = await client.PostAsync(uri, content);                
-                //result = response.EnsureSuccessStatusCode().ToString();
-            }
-            return result;
-        }
-        #endregion
-
-
         #region 專門處理關鍵字 - "PM2.5"
         /// <summary>
         /// 專門處理關鍵字 - "PM2.5"
@@ -91,6 +63,59 @@ namespace WebHook.Models
             {
                 remsg = ex.Message;
             }
+            return remsg;
+        }
+        #endregion
+
+        #region 專門處理匯率查詢
+        public static string GetExchange(string pmsg)
+        {
+            // 先處理對話訊息的字眼,只留數字
+            pmsg = pmsg.Replace("的", "");
+            pmsg = pmsg.Replace("匯率", "");
+
+            List<ExchangeRate> list = new List<ExchangeRate>();
+            HtmlWeb htmlWeb = new HtmlWeb();
+            //因為台銀的網頁非 big5 編碼，所以不強制轉碼
+            //htmlWeb.OverrideEncoding = Encoding.GetEncoding("big5");
+
+            //讀取台灣銀行牌告匯率網頁
+            HtmlAgilityPack.HtmlDocument htmlDoc = htmlWeb.Load("http://rate.bot.com.tw/xrt?Lang=zh-TW");
+            ExchangeRate er = new ExchangeRate();
+            for (int row = 1; row <= 19; row++)
+            {
+                list.Add(new ExchangeRate
+                {
+                    Currency = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[1]/div[1]/div[3]", row)).InnerText.Trim(),
+                    CashIn = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[2]", row)).InnerText.Trim(),
+                    CashOut = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[3]", row)).InnerText.Trim(),
+                    SpotIn = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[4]", row)).InnerText.Trim(),
+                    SpotOut = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[5]", row)).InnerText.Trim()
+                });
+            }
+
+            string remsg = string.Empty;
+            if (pmsg.Contains("今日") || pmsg == "")
+            {
+                foreach (var st in list)
+                {
+                    remsg += string.Format(@"幣別：{1}{0}買入現金匯率：{2}{0}賣出現金匯率：{3}{0}買入即期匯率：{4}{0}賣出即期匯率：{5}{0}{0}",
+                                                      System.Environment.NewLine, st.Currency, st.CashIn, st.CashOut, st.SpotIn, st.SpotOut);
+                }
+            }
+            else
+            {
+                var showlist = (from l in list where l.Currency.Contains(pmsg) select l);
+                if (showlist.Any())
+                {
+                    foreach (var st in showlist)
+                    {
+                        remsg += string.Format(@"幣別：{1}{0}買入現金匯率：{2}{0}賣出現金匯率：{3}{0}買入即期匯率：{4}{0}賣出即期匯率：{5}{0}{0}",
+                                                          System.Environment.NewLine, st.Currency, st.CashIn, st.CashOut, st.SpotIn, st.SpotOut);
+                    }
+                }
+            }
+            //LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
             return remsg;
         }
         #endregion

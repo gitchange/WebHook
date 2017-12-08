@@ -15,13 +15,12 @@ using System.Web.Configuration;
 using Hangfire;
 using isRock.LineBot;
 
-
 namespace WebHook.Controllers
 {
     public class LineChatController : ApiController
-    {        
+    {
         protected string ChannelAccessToken = WebConfigurationManager.AppSettings["ChannelAccessToken"].ToString();
-        protected string myLineID = WebConfigurationManager.AppSettings["BobobearID"].ToString();               
+        protected string myLineID = WebConfigurationManager.AppSettings["BobobearID"].ToString();
         protected ReceievedMessage ReceivedMessage;
         protected Bot LintBot;
         protected LineUserInfo userInfo;
@@ -41,14 +40,13 @@ namespace WebHook.Controllers
         public async Task<IHttpActionResult> GetAsync()
         //public IHttpActionResult Get()
         {
-            string pm25 = await CallFunction.GetAirQulity("善化 嘉義 新營 的空污");
-            string pm25on = "大家早！以下是三處的空污狀況，祝各位出門順心，一路平安！" + Environment.NewLine + pm25;
-            string pm25off = "啾咪！以下是三處的空污狀況，祝各位下班順心，一路平安！" + Environment.NewLine + pm25;
-
-
             //await CallFunction.CallLineAPIPushMessage(pm25);
             //RecurringJob.AddOrUpdate(() => CallFunction.CallLineAPIPushMessage(pm25), "*/3 * * * *");            
-            RecurringJob.AddOrUpdate(() => CallFunction.CallLineAPIPushMessage(pm25off), Cron.Daily(17, 0));            
+
+            RecurringJob.AddOrUpdate(() => Jobs.job_pm25_0700(), Cron.Daily(07, 00), TimeZoneInfo.FindSystemTimeZoneById("China Standard Time"));
+            RecurringJob.AddOrUpdate(() => Jobs.job_pm25_1700(), Cron.Daily(17, 00), TimeZoneInfo.FindSystemTimeZoneById("China Standard Time"));
+            RecurringJob.AddOrUpdate(() => Jobs.job_exchange_rate_1200(), Cron.Daily(12, 00), TimeZoneInfo.FindSystemTimeZoneById("China Standard Time"));
+            RecurringJob.AddOrUpdate(() => Jobs.job_exchange_rate_1630(), Cron.Daily(16, 30), TimeZoneInfo.FindSystemTimeZoneById("China Standard Time"));
 
             return Ok();
         }
@@ -100,10 +98,10 @@ namespace WebHook.Controllers
                 //專門處理關鍵字 - "PM2.5"
                 if (userMsg.ToUpper().Contains("PM2.5") || userMsg.Contains("空氣品質") || userMsg.Contains("空污"))
                 {
-                    string pm25 = await CallFunction.GetAirQulity(userMsg.ToUpper());
-                    isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, pm25, ChannelAccessToken);
+                    string getmsg = await CallFunction.GetAirQulity(userMsg.ToUpper());
+                    isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, getmsg, ChannelAccessToken);
                     //LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, pm25);
-                    
+
                 }
 
                 //專門處理關鍵字 - "股價 / 股票"
@@ -115,7 +113,8 @@ namespace WebHook.Controllers
                 //專門處理關鍵字 - "股價 / 股票"
                 if (userMsg.ToUpper().Contains("匯率"))
                 {
-                    GetExchange(userMsg.ToUpper());
+                    string getmsg = CallFunction.GetExchange(userMsg.ToUpper());
+                    isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, getmsg, ChannelAccessToken);
                 }
 
                 ////專門處理 Q & A ：前置字元為"熊熊："
@@ -366,7 +365,7 @@ namespace WebHook.Controllers
             //LintBot.PushMessage(userInfo.userId, string.Format("GroupName={0} ; GropuID={1}", groupInfo.displayName, groupInfo.userId));
             //LintBot.PushMessage(userInfo.userId, string.Format("RoomName={0} ; RoomID={1}", roomInfo.displayName, roomInfo.userId));
             LintBot.PushMessage(myLineID, string.Format("哈囉！我是熊熊忘記了，現在主動PO訊息給你。{0} 的 Line ID 是 {1}", userInfo.displayName, userInfo.userId));
-            LintBot.PushMessage(myLineID, string.Format("POST內容為：{0}", postData));            
+            LintBot.PushMessage(myLineID, string.Format("POST內容為：{0}", postData));
         }
         #endregion
 
@@ -417,14 +416,14 @@ namespace WebHook.Controllers
             Message = pdistrict + "，" + ResponseMessage[nSex, current_random];
             //回覆用戶
             isRock.LineBot.Utility.ReplyMessage(ReceivedMessage.events[0].replyToken, Message, ChannelAccessToken);
-            
+
             // 暫時測試
             //isRock.LineBot.Bot bot = new isRock.LineBot.Bot(ChannelAccessToken);
             //var userInfo = bot.GetUserInfo(ReceivedMessage.events.FirstOrDefault().source.userId);
             //bot.PushMessage(myLineID, $"UserName='{userInfo.displayName}' , UserID='{userInfo.userId}' ");
         }
-        #endregion        
-        
+        #endregion
+
         #region 專門處理股價查詢
         private void GetStock(string msg)
         {
@@ -470,56 +469,5 @@ namespace WebHook.Controllers
         }
         #endregion
 
-        #region 專門處理匯率查詢
-        private void GetExchange(string msg)
-        {
-            // 先處理對話訊息的字眼,只留數字
-            msg = msg.Replace("的", "");
-            msg = msg.Replace("匯率", "");
-
-            List<ExchangeRate> list = new List<ExchangeRate>();
-            HtmlWeb htmlWeb = new HtmlWeb();
-            //因為台銀的網頁非 big5 編碼，所以不強制轉碼
-            //htmlWeb.OverrideEncoding = Encoding.GetEncoding("big5");
-
-            //讀取台灣銀行牌告匯率網頁
-            HtmlAgilityPack.HtmlDocument htmlDoc = htmlWeb.Load("http://rate.bot.com.tw/xrt?Lang=zh-TW");
-            ExchangeRate er = new ExchangeRate();
-            for (int row = 1; row <= 19; row++)
-            {
-                list.Add(new ExchangeRate
-                {
-                    Currency = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[1]/div[1]/div[3]", row)).InnerText.Trim(),
-                    CashIn = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[2]", row)).InnerText.Trim(),
-                    CashOut = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[3]", row)).InnerText.Trim(),
-                    SpotIn = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[4]", row)).InnerText.Trim(),
-                    SpotOut = htmlDoc.DocumentNode.SelectSingleNode(string.Format(@"/html[1]/body[1]/div[1]/main[1]/div[4]/table[1]/tbody[1]/tr[{0}]/td[5]", row)).InnerText.Trim()
-                });
-            }
-
-            string remsg = string.Empty;
-            if (msg.Contains("今日") || msg == "")
-            {
-                foreach (var st in list)
-                {
-                    remsg += string.Format(@"幣別：{1}{0}買入現金匯率：{2}{0}賣出現金匯率：{3}{0}買入即期匯率：{4}{0}賣出即期匯率：{5}{0}{0}",
-                                                      System.Environment.NewLine, st.Currency, st.CashIn, st.CashOut, st.SpotIn, st.SpotOut);
-                }
-            }
-            else
-            {
-                var showlist = (from l in list where l.Currency.Contains(msg) select l);
-                if (showlist.Any())
-                {
-                    foreach (var st in showlist)
-                    {
-                        remsg += string.Format(@"幣別：{1}{0}買入現金匯率：{2}{0}賣出現金匯率：{3}{0}買入即期匯率：{4}{0}賣出即期匯率：{5}{0}{0}",
-                                                          System.Environment.NewLine, st.Currency, st.CashIn, st.CashOut, st.SpotIn, st.SpotOut);
-                    }
-                }
-            }
-            LintBot.ReplyMessage(ReceivedMessage.events[0].replyToken, remsg);
-        }
-        #endregion
     }
 }
